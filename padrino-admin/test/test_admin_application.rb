@@ -81,19 +81,31 @@ class TestAdminApplication < Test::Unit::TestCase
         role.project_module :settings, "/settings"
       end
 
-      access_control.roles_for :editor do |role|
+      access_control.roles_for :editor, :other do |role|
         role.project_module :posts, "/posts"
+      end
+      
+      access_control.roles_for :other do |role|
+        role.project_module :other, "/other"
       end
 
       assert access_control.allowed?(Account.admin, "/login")
       assert access_control.allowed?(Account.admin, "/any")
       assert access_control.allowed?(Account.admin, "/settings")
       assert ! access_control.allowed?(Account.admin, "/posts")
+      assert ! access_control.allowed?(Account.admin, "/other")
+      
+      assert access_control.allowed?(Account.other, "/login")
+      assert access_control.allowed?(Account.other, "/any")
+      assert ! access_control.allowed?(Account.other, "/settings")
+      assert access_control.allowed?(Account.other, "/posts")
+      assert access_control.allowed?(Account.other, "/other")
 
       assert access_control.allowed?(Account.editor, "/login")
       assert access_control.allowed?(Account.editor, "/any")
       assert ! access_control.allowed?(Account.editor, "/settings")
       assert access_control.allowed?(Account.editor, "/posts")
+      assert ! access_control.allowed?(Account.editor, "/other")
 
       # Prepare a basic page
       get "/login(/:role)" do
@@ -104,6 +116,7 @@ class TestAdminApplication < Test::Unit::TestCase
       get "/any"      do; "any";      end
       get "/settings" do; "settings"; end
       get "/posts"    do; "posts";    end
+      get "/other"    do; "other";    end
     end
 
     get "/login"
@@ -128,6 +141,9 @@ class TestAdminApplication < Test::Unit::TestCase
     assert_equal "settings", body
 
     get "/posts"
+    assert_equal "You don't have permission for this resource", body
+    
+    get "/other"
     assert_equal "You don't have permission for this resource", body
 
     get "/login/editor"
@@ -206,10 +222,14 @@ class TestAdminApplication < Test::Unit::TestCase
         role.project_module :admin, "/admin"
       end
 
-      access_control.roles_for :editor do |role|
+      access_control.roles_for :editor,:other do |role|
         role.project_module :editor, "/editor"
       end
 
+      access_control.roles_for :other do |role|
+        role.project_module :other, "/other"
+      end
+      
       get "/login" do
         set_current_account(Account.admin)
         "Logged in"
@@ -229,7 +249,7 @@ class TestAdminApplication < Test::Unit::TestCase
     end
 
     get "/roles"
-    assert_equal "admin, editor", body
+    assert_equal "admin, editor, other", body
 
     get "/modules"
     assert_equal "foo => /foo, bar => /bar", body

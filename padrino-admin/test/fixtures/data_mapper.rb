@@ -4,6 +4,7 @@ require 'dm-validations'
 require 'dm-aggregates'
 require 'digest/sha1'
 
+DataMapper::Logger.new("debug.log", :debug)
 DataMapper.setup(:default, 'sqlite3::memory:')
 
 # Fake Category Model
@@ -29,8 +30,10 @@ class Account
   property :salt,             String
   property :role,             String
 
+  has n, :roles, :through => Resource
+
   # Validations
-  validates_presence_of      :email, :role
+  validates_presence_of      :email
   validates_presence_of      :password,                          :if => :password_required
   validates_presence_of      :password_confirmation,             :if => :password_required
   validates_length_of        :password, :min => 4, :max => 40,   :if => :password_required
@@ -38,11 +41,11 @@ class Account
   validates_length_of        :email,    :min => 3, :max => 100
   validates_uniqueness_of    :email,    :case_sensitive => false
   validates_format_of        :email,    :with => :email_address
-  validates_format_of        :role,     :with => /[A-Za-z]/
 
   has n, :categories
-  def self.admin;  first(:role => "admin");  end
+  def self.admin; first(roles.name => "admin"); end
   def self.editor; first(:role => "editor"); end
+  def self.other; first(roles.name => "other"); end
 
   # Callbacks
   before :save, :generate_password
@@ -81,14 +84,27 @@ class Account
     end
 end
 
+class Role
+  include DataMapper::Resource
+  property :name, String, :key => true
+  has n, :account, :through => Resource
+end
+
+
 DataMapper.auto_migrate!
 
+admin_role = Role.create(:name => "admin")
+editor_role = Role.create(:name => "editor")
+other_role = Role.create(:name => "other")
+
 # We build some fake accounts
-admin  = Account.create(:name => "DAddYE", :role => "admin",  :email => "d.dagostino@lipsiasoft.com",
-                        :password => "some", :password_confirmation => "some")
+admin  = Account.create(:name => "DAddYE", :email => "d.dagostino@lipsiasoft.com",
+                        :password => "some", :password_confirmation => "some", :roles => [admin_role])
 editor = Account.create(:name => "Dexter", :role => "editor", :email => "editor@lipsiasoft.com",
                         :password => "some", :password_confirmation => "some")
-
+editor_with_role = Account.create(:name => "Draco", :email => "another.editor@lipsiasoft.com",
+                        :password => "some", :password_confirmation => "some", :roles => [editor_role, other_role])
+                        
 %w(News Press HowTo).each do |c|
   admin.categories.create(:name => c)
   editor.categories.create(:name => c)

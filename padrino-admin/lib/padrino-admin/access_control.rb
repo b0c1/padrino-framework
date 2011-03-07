@@ -50,8 +50,11 @@ module Padrino
         # Return an array of project_modules
         #
         def project_modules(account)
-          role = account.role.to_sym rescue :any
-          authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
+          role_list = account.roles.map{|r| r.name.to_sym unless r.name.nil?} if !(account.nil? or account.roles.nil?) rescue nil
+          role_list = [account.role.to_sym] if role_list.nil? or role_list.empty? rescue nil
+          role_list = [:any] if role_list.nil? or role_list.empty? rescue [:any]
+
+          authorizations = @authorizations.find_all { |auth| !(auth.roles & role_list).empty? }
           authorizations.collect(&:project_modules).flatten.uniq
         end
 
@@ -60,20 +63,23 @@ module Padrino
         #
         def allowed?(account=nil, path=nil)
           path = "/" if path.blank?
-          role = account.role.to_sym rescue nil
+          role_list = account.roles.map{|r| r.name.to_sym unless r.name.nil?} if !(account.nil? or account.roles.nil?) rescue nil
+          role_list = [account.role.to_sym] if role_list.nil? or role_list.empty? rescue nil
+          role_list = [] if role_list.nil? or role_list.empty? rescue []
+
           authorizations = @authorizations.find_all { |auth| auth.roles.include?(:any) }
-          allowed_paths  = authorizations.collect(&:allowed).flatten.uniq
-          denied_paths   = authorizations.collect(&:denied).flatten.uniq
+          allowed_paths = authorizations.collect(&:allowed).flatten.uniq
+          denied_paths = authorizations.collect(&:denied).flatten.uniq
           if account
             denied_paths.clear
-            authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
+            authorizations = @authorizations.find_all { |auth| !(auth.roles & role_list).empty? }
             allowed_paths += authorizations.collect(&:allowed).flatten.uniq
-            authorizations = @authorizations.find_all { |auth| !auth.roles.include?(role) && !auth.roles.include?(:any) }
-            denied_paths  += authorizations.collect(&:allowed).flatten.uniq
-            denied_paths  += authorizations.collect(&:denied).flatten.uniq
+            authorizations = @authorizations.find_all { |auth| (auth.roles & role_list).empty? && !auth.roles.include?(:any) }
+            denied_paths += authorizations.collect(&:allowed).flatten.uniq
+            denied_paths += authorizations.collect(&:denied).flatten.uniq
           end
-          return true  if allowed_paths.any? { |p| path =~ /^#{p}/ }
-          return false if denied_paths.any?  { |p| path =~ /^#{p}/ }
+          return true if allowed_paths.any? { |p| path =~ /^#{p}/ }
+          return false if denied_paths.any? { |p| path =~ /^#{p}/ }
           true
         end
       end # Base
